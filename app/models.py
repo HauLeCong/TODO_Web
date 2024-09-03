@@ -1,12 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 from werkzeug.security import generate_password_hash, check_password_hash
-from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+from itsdangerous import URLSafeTimedSerializer as Serializer
 from markdown import markdown
 import bleach
 from flask import current_app, request, url_for
 from flask_login import UserMixin, AnonymousUserMixin
-from app.exceptions import ValidateionError
+from .exceptions import ValidationError
 from . import db, login_manager
 
 
@@ -19,7 +19,8 @@ class Role(db.Model):
     __tablename__ = "roles"
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True)
-    permission = db.Column(db.Integer)
+    default = db.Column(db.Boolean, default=False, index=True)
+    permissions = db.Column(db.Integer)
     users = db.relationship("User", backref="role", lazy="dynamic")
 
     def __init__(self, **kwargs):
@@ -50,10 +51,10 @@ class Role(db.Model):
         if not self.has_permission(perm):
             self.permissions += perm
 
-    def reset_permission(self):
-        self.permissions -= 0
+    def reset_permissions(self):
+        self.permissions = 0
 
-    def remove_permission(self, perm):
+    def remove_permissions(self, perm):
         if not self.has_permission(perm):
             self.permissions -= perm
 
@@ -66,7 +67,7 @@ class Role(db.Model):
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"
-    id = db.Column(db.Intefer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String, unique=True, index=True)
     username = db.Column(db.String, unique=True, index=True)
     role_id = db.Column(db.Integer, db.ForeignKey("roles.id"))
@@ -75,6 +76,7 @@ class User(UserMixin, db.Model):
     todos = db.relationship("ToDo", backref="user", lazy="dynamic")
 
     def __init__(self, **kwargs):
+        super(User, self).__init__(**kwargs)
         if self.role is None:
             if self.email == current_app.config["TODO_ADMIN"]:
                 self.role = Role.query.filter_by(name="Administrator").first()
@@ -92,9 +94,9 @@ class User(UserMixin, db.Model):
     def verify_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def generate_confirmation_token(self, expiration=3600):
-        s = Serializer(current_app.config["SECRET_KEY"], expiration)
-        return s.dumps({"confirm": self.id}).decode("utf-8")
+    def generate_confirmation_token(self):
+        s = Serializer(current_app.config["SECRET_KEY"])
+        return s.dumps({"confirm": self.id})
 
     def confirm(self, token):
         s = Serializer(current_app.config["SECRET_KEY"])
@@ -142,11 +144,15 @@ class User(UserMixin, db.Model):
 
 
 class ToDo(db.Model):
-    __tablename__ = "posts"
+    __tablename__ = "todos"
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.now(datetime.UTC))
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    timestamp = db.Column(
+        db.DateTime,
+        index=True,
+        default=datetime.now(),
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
 
     @staticmethod
     def on_change_body(target, value, oldvalue, initiator):
@@ -168,8 +174,13 @@ class ToDo(db.Model):
     def from_json(json_post):
         body = json_post.get("body")
         if body is None or body == "":
-            raise ValidateionError("post does not have a body")
+            raise ValidationError("post does not have a body")
         return ToDo(body=body)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 
 db.event.listen(ToDo.name, "set", ToDo.on_change_body)

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block title %}TODO - {{ user.username }}{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <img class="img-rounded profile-thumbnail" }}">
+    <div class="profile-header">
+        <h1>{{ user.username }}</h1>
+        {% if user.name %}
+        <p>
+            {% if user.name %}{{ user.name }}<br>{% endif %}
+        </p>
+        {% endif %}
+    
+        <p>{{ user.todos.count() }} todos.</p>
+    </div>
+</div>
+<h3>Posts by {{ user.username }}</h3>
+{% include '_todos.html' %}
+{% if pagination %}
+<div class="pagination">
+    {{ macros.pagination_widget(pagination, '.user', username=user.username) }}
+</div>
+{% endif %}
+{% endblock %}
