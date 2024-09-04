@@ -4,7 +4,9 @@ Subject cover:
 - Flask (Blueprint, project structure)
 - pytest
 - error handler
-- delpoyment
+- heroku delpoyment
+- flask deploy
+- email
 
 #   Hello world
         Sub content
