@@ -1,5 +1,6 @@
 <ul class="posts">
     {% for todo in todos %}
+    {% if current_user == todo.user %}
     <li class="post">
         <div class="post-thumbnail">
             <a href="{{ url_for('.user', username=todo.user.username) }}">
@@ -25,5 +26,6 @@
             </div>
         </div>
     </li>
+    {% endif %}
     {% endfor %}
 </ul>
